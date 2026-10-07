@@ -395,12 +395,18 @@ impl Spirc {
         Ok(self.commands.send(SpircCommand::ClearQueue)?)
     }
 
-    /// Adds a track or episode to the queue, after the tracks already
-    /// queued there and before the playing context's own.
+    /// Adds a track, episode, or local file to the queue, after the tracks
+    /// already queued there and before the playing context's own.
+    ///
+    /// A local file is served from this device's own disk, so it never
+    /// reaches Spotify; the connect state only has to carry the URI.
     ///
     /// Does nothing if we are not the active device.
     pub fn add_to_queue(&self, uri: String) -> Result<(), Error> {
-        if !uri.starts_with("spotify:track:") && !uri.starts_with("spotify:episode:") {
+        let queueable = uri.starts_with("spotify:track:")
+            || uri.starts_with("spotify:episode:")
+            || uri.starts_with("spotify:local:");
+        if !queueable {
             return Err(Error::invalid_argument("uri"));
         }
         Ok(self.commands.send(SpircCommand::AddToQueue(uri))?)
