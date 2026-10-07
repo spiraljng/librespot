@@ -12,12 +12,16 @@ use symphonia::core::{
 
 use super::{AudioDecoder, AudioPacket, AudioPacketPosition, DecoderError, DecoderResult};
 
-use crate::{NUM_CHANNELS, PAGES_PER_MS, SAMPLE_RATE, player::NormalisationData, symphonia_util};
+use crate::{
+    NUM_CHANNELS, PAGES_PER_MS, SAMPLE_RATE, player::NormalisationData, resample::Resampler,
+    symphonia_util,
+};
 
 pub struct SymphoniaDecoder {
     probe_result: ProbeResult,
     decoder: Box<dyn Decoder>,
     sample_buffer: Option<SampleBuffer<f64>>,
+    resampler: Option<Resampler>,
 }
 
 #[derive(Default)]
@@ -64,11 +68,11 @@ impl SymphoniaDecoder {
             DecoderError::SymphoniaDecoder("Could not retrieve sample rate".into())
         })?;
 
-        // TODO: The official client supports local files with sample rates other than 44,100 kHz.
-        // To play these accurately, we need to either resample the input audio, or introduce a way
-        // to change the player's current sample rate (likely by closing and re-opening the sink
-        // with new parameters).
-        if rate != SAMPLE_RATE {
+        // Spotify streams arrive at the player's rate, but a local file can
+        // carry any rate. Convert it here rather than refuse to play it, so
+        // every stage below, including the sink, stays on `SAMPLE_RATE`.
+        let resampler = Resampler::new(rate, SAMPLE_RATE, NUM_CHANNELS as usize);
+        if rate != SAMPLE_RATE && resampler.is_none() {
             return Err(DecoderError::SymphoniaDecoder(format!(
                 "Unsupported sample rate: {rate}"
             )));
@@ -89,6 +93,7 @@ impl SymphoniaDecoder {
             // We set the sample buffer when decoding the first full packet,
             // whose duration is also the ideal sample buffer size.
             sample_buffer: None,
+            resampler,
         })
     }
 
@@ -253,7 +258,11 @@ impl AudioDecoder for SymphoniaDecoder {
                     };
 
                     sample_buffer.copy_interleaved_ref(decoded);
-                    let samples = AudioPacket::Samples(sample_buffer.samples().to_vec());
+                    let samples = match self.resampler.as_mut() {
+                        Some(resampler) => resampler.process(sample_buffer.samples()),
+                        None => sample_buffer.samples().to_vec(),
+                    };
+                    let samples = AudioPacket::Samples(samples);
 
                     return Ok(Some((packet_position, samples)));
                 }

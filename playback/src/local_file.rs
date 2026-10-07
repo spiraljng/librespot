@@ -29,6 +29,23 @@ impl LocalFileLookup {
     pub fn get(&self, uri: &SpotifyUri) -> Option<&Path> {
         self.0.get(uri).map(|p| p.as_path())
     }
+
+    /// Every file found, in no particular order.
+    ///
+    /// A caller that lists the files for a listener builds that list from
+    /// here, so what is shown and what playback will find cannot disagree.
+    pub fn entries(&self) -> impl Iterator<Item = (&SpotifyUri, &Path)> {
+        self.0.iter().map(|(uri, path)| (uri, path.as_path()))
+    }
+
+    /// How many files were found.
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
 }
 
 pub fn create_local_file_lookup(directories: &[PathBuf]) -> LocalFileLookup {

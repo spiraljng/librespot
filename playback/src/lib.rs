@@ -10,9 +10,10 @@ pub mod config;
 pub mod convert;
 pub mod decoder;
 pub mod dither;
-mod local_file;
+pub mod local_file;
 pub mod mixer;
 pub mod player;
+mod resample;
 mod symphonia_util;
 
 pub const SAMPLE_RATE: u32 = 44100;
